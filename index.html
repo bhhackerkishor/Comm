@@ -52,6 +52,29 @@
     .end-btn {
       background: #ef4444;
     }
+
+    .audio-indicators {
+      margin: 15px 0;
+      display: flex;
+      justify-content: space-around;
+    }
+
+    .indicator {
+      padding: 8px 15px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .speaking {
+      background: #22c55e;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.7; }
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -60,6 +83,11 @@
     <p><strong>You:</strong> <span id="you">—</span></p>
     <p><strong>Partner:</strong> <span id="partner">Not connected</span></p>
     <p><strong>Status:</strong> <span id="status">Connecting...</span></p>
+
+    <div class="audio-indicators">
+      <div class="indicator" id="localIndicator">You: 🔴</div>
+      <div class="indicator" id="remoteIndicator">Partner: 🔴</div>
+    </div>
 
     <div class="btn-group">
       <button class="find-btn" id="findPartnerBtn">Find Partner</button>
@@ -73,7 +101,7 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
     // ⚙️ Replace with your own backend server URL
-    const socket = io("https://server-09p9.onrender.com");
+    const socket = io("https://your-server-url.com");
 
     const statusEl = document.getElementById("status");
     const youEl = document.getElementById("you");
@@ -82,11 +110,21 @@
     const remoteAudio = document.getElementById("remoteAudio");
     const findPartnerBtn = document.getElementById("findPartnerBtn");
     const endCallBtn = document.getElementById("endCallBtn");
+    const localIndicator = document.getElementById("localIndicator");
+    const remoteIndicator = document.getElementById("remoteIndicator");
 
     let pc = null;
     let localStream = null;
+    let remoteStream = null;
     let you = localStorage.getItem("username");
     let partner = null;
+    let isCallActive = false;
+
+    // Audio level monitoring
+    let localAudioContext = null;
+    let remoteAudioContext = null;
+    let localAnalyser = null;
+    let remoteAnalyser = null;
 
     if (!you) {
       you = prompt("Enter your username:");
@@ -111,6 +149,246 @@
       });
 
       pc.oniceconnectionstatechange = () => {
+        console.log("ICE State:", pc.iceConnectionState);
+        setStatus("ICE: " + pc.iceConnectionState);
+        
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          isCallActive = true;
+          startAudioMonitoring();
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log("Connection State:", pc.connectionState);
+        if (pc.connectionState === 'connected') {
+          setStatus("✅ Call connected - Both users can speak");
+        }
+      };
+
+      // 🎤 Get mic access
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        });
+        localAudio.srcObject = localStream;
+        
+        // Add all tracks to peer connection
+        localStream.getTracks().forEach(track => {
+          pc.addTrack(track, localStream);
+        });
+
+        // Setup local audio monitoring
+        setupLocalAudioMonitoring();
+      } catch (error) {
+        console.error("Error accessing microphone:", error);
+        setStatus("❌ Microphone access denied");
+        return;
+      }
+
+      // 🎧 Handle remote tracks - FIXED: This ensures all remote tracks are captured
+      pc.ontrack = event => {
+        console.log("🎧 Received remote track:", event.track.kind);
+        
+        if (event.track.kind === 'audio') {
+          if (!remoteStream) {
+            remoteStream = new MediaStream();
+          }
+          remoteStream.addTrack(event.track);
+          remoteAudio.srcObject = remoteStream;
+          
+          // Play remote audio
+          remoteAudio.play().catch(err => console.log("Remote audio play failed:", err));
+          
+          // Setup remote audio monitoring
+          setupRemoteAudioMonitoring();
+        }
+      };
+
+      // 🌍 Send ICE candidates
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          socket.emit("signal", { candidate: event.candidate });
+        }
+      };
+
+      // Monitor for track ending
+      pc.onremovetrack = event => {
+        console.log("Track removed:", event.track.kind);
+      };
+    }
+
+    function setupLocalAudioMonitoring() {
+      if (!localStream) return;
+      
+      try {
+        localAudioContext = new AudioContext();
+        const source = localAudioContext.createMediaStreamSource(localStream);
+        localAnalyser = localAudioContext.createAnalyser();
+        localAnalyser.fftSize = 256;
+        source.connect(localAnalyser);
+        
+        monitorAudioLevel('local');
+      } catch (error) {
+        console.log("Local audio monitoring not supported:", error);
+      }
+    }
+
+    function setupRemoteAudioMonitoring() {
+      if (!remoteStream) return;
+      
+      try {
+        remoteAudioContext = new AudioContext();
+        const source = remoteAudioContext.createMediaStreamSource(remoteStream);
+        remoteAnalyser = remoteAudioContext.createAnalyser();
+        remoteAnalyser.fftSize = 256;
+        source.connect(remoteAnalyser);
+        
+        monitorAudioLevel('remote');
+      } catch (error) {
+        console.log("Remote audio monitoring not supported:", error);
+      }
+    }
+
+    function startAudioMonitoring() {
+      console.log("Starting audio level monitoring...");
+    }
+
+    function monitorAudioLevel(type) {
+      if (!isCallActive) return;
+
+      const analyser = type === 'local' ? localAnalyser : remoteAnalyser;
+      const indicator = type === 'local' ? localIndicator : remoteIndicator;
+      
+      if (!analyser) return;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      let average = sum / dataArray.length;
+
+      // Update indicator based on audio level
+      if (average > 10) { // Threshold for detecting audio
+        indicator.classList.add('speaking');
+        indicator.textContent = type === 'local' ? 'You: 🟢 Speaking' : 'Partner: 🟢 Speaking';
+      } else {
+        indicator.classList.remove('speaking');
+        indicator.textContent = type === 'local' ? 'You: 🔴' : 'Partner: 🔴';
+      }
+
+      requestAnimationFrame(() => monitorAudioLevel(type));
+    }
+
+    async function startCall() {
+      await initPeer();
+      console.log("📞 Starting call...");
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("signal", { type: offer.type, sdp: offer.sdp });
+    }
+
+    function endCall() {
+      console.log("❌ Ending call...");
+      isCallActive = false;
+      
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      if (remoteStream) {
+        remoteStream = null;
+      }
+      
+      partnerEl.textContent = "Not connected";
+      setStatus("Call ended");
+      socket.emit("end-call");
+      
+      // Reset indicators
+      localIndicator.classList.remove('speaking');
+      remoteIndicator.classList.remove('speaking');
+      localIndicator.textContent = 'You: 🔴';
+      remoteIndicator.textContent = 'Partner: 🔴';
+    }
+
+    socket.on("status", msg => setStatus(msg));
+    socket.on("waiting", msg => setStatus(msg));
+
+    socket.on("partner-found", async ({ partnerId, partnerName }) => {
+      partner = { id: partnerId, name: partnerName };
+      partnerEl.textContent = partnerName;
+      setStatus(`🤝 Connected with ${partnerName}`);
+      await startCall();
+    });
+
+    socket.on("signal", async data => {
+      if (!pc) await initPeer();
+
+      if (data.type === "offer") {
+        console.log("📨 Got offer");
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("signal", { type: answer.type, sdp: answer.sdp });
+      } else if (data.type === "answer") {
+        console.log("📨 Got answer");
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+      } else if (data.candidate) {
+        console.log("📨 Got ICE candidate");
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (error) {
+          console.log("Error adding ICE candidate:", error);
+        }
+      }
+    });
+
+    socket.on("partner-left", () => {
+      setStatus("❌ Partner left the call");
+      endCall();
+    });
+
+    socket.on("call-ended", () => {
+      setStatus("📞 Call ended");
+      endCall();
+    });
+
+    findPartnerBtn.addEventListener("click", () => {
+      socket.emit("find-partner");
+      setStatus("🔍 Searching for a partner...");
+    });
+
+    endCallBtn.addEventListener("click", endCall);
+
+    function setStatus(msg) {
+      console.log("STATUS:", msg);
+      statusEl.textContent = msg;
+    }
+
+    // 🎵 Ensure autoplay works
+    document.addEventListener("click", () => {
+      if (remoteAudio.srcObject) {
+        remoteAudio.play().catch(err => console.log("Audio play failed:", err));
+      }
+      if (localAudio.srcObject) {
+        localAudio.play().catch(err => console.log("Local audio play failed:", err));
+      }
+    });
+  </script>
+</body>
+</html>      pc.oniceconnectionstatechange = () => {
         console.log("ICE State:", pc.iceConnectionState);
         setStatus("ICE: " + pc.iceConnectionState);
       };
