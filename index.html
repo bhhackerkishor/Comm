@@ -38,6 +38,11 @@
       border-radius: 10px;
       color: white;
       cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+
+    button:hover {
+      opacity: 0.8;
     }
 
     .find-btn {
@@ -67,7 +72,8 @@
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
-    const socket = io("https://server-09p9.onrender.com"); // ⚙️ Replace with your backend server URL
+    // ⚙️ Replace with your own backend server URL
+    const socket = io("https://server-09p9.onrender.com");
 
     const statusEl = document.getElementById("status");
     const youEl = document.getElementById("you");
@@ -78,6 +84,7 @@
     const endCallBtn = document.getElementById("endCallBtn");
 
     let pc = null;
+    let localStream = null;
     let you = localStorage.getItem("username");
     let partner = null;
 
@@ -87,8 +94,68 @@
     }
 
     youEl.textContent = you;
-    setStatus("🟢 Registered as " + you);
     socket.emit("register", you);
+    setStatus("🟢 Registered as " + you);
+
+    async function initPeer() {
+      console.log("🔧 Initializing PeerConnection...");
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          {
+            urls: "turn:relay1.expressturn.com:3478",
+            username: "efYvUkv7MbtiSKErK3",
+            credential: "WbCkgvA3LhmuJvOK"
+          }
+        ]
+      });
+
+      pc.oniceconnectionstatechange = () => {
+        console.log("ICE State:", pc.iceConnectionState);
+        setStatus("ICE: " + pc.iceConnectionState);
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log("Connection State:", pc.connectionState);
+      };
+
+      // 🎤 Get mic access
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localAudio.srcObject = localStream;
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      // 🎧 Remote audio
+      pc.ontrack = event => {
+        console.log("🎧 Received remote track");
+        const [remoteStream] = event.streams;
+        remoteAudio.srcObject = remoteStream;
+        remoteAudio.play().catch(err => console.log("Audio play failed:", err));
+      };
+
+      // 🌍 Send ICE candidates
+      pc.onicecandidate = event => {
+        if (event.candidate) socket.emit("signal", { candidate: event.candidate });
+      };
+    }
+
+    async function startCall() {
+      await initPeer();
+      console.log("📞 Starting call...");
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("signal", offer);
+    }
+
+    function endCall() {
+      console.log("❌ Ending call...");
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      partnerEl.textContent = "Not connected";
+      setStatus("Call ended");
+      socket.emit("end-call");
+    }
 
     socket.on("status", msg => setStatus(msg));
     socket.on("waiting", msg => setStatus(msg));
@@ -101,16 +168,52 @@
     });
 
     socket.on("signal", async data => {
-      if (!pc) return;
+      if (!pc) await initPeer();
+
       if (data.type === "offer") {
+        console.log("📨 Got offer");
         await pc.setRemoteDescription(new RTCSessionDescription(data));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit("signal", answer);
       } else if (data.type === "answer") {
+        console.log("📨 Got answer");
         await pc.setRemoteDescription(new RTCSessionDescription(data));
       } else if (data.candidate) {
+        console.log("📨 Got ICE candidate");
         await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+    });
+
+    socket.on("partner-left", () => {
+      setStatus("❌ Partner left the call");
+      endCall();
+    });
+
+    socket.on("call-ended", () => {
+      setStatus("📞 Call ended");
+      endCall();
+    });
+
+    findPartnerBtn.addEventListener("click", () => {
+      socket.emit("find-partner");
+      setStatus("🔍 Searching for a partner...");
+    });
+
+    endCallBtn.addEventListener("click", endCall);
+
+    function setStatus(msg) {
+      console.log("STATUS:", msg);
+      statusEl.textContent = msg;
+    }
+
+    // 🎵 Ensure autoplay works
+    document.addEventListener("click", () => {
+      if (remoteAudio.srcObject) remoteAudio.play();
+    });
+  </script>
+</body>
+</html>        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
       }
     });
 
