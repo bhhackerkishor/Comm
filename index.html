@@ -214,8 +214,8 @@
       muteBtn.style.display = "none";
       speakerBtn.style.display = "none";
       joinBtn.disabled = false;
-      statusText.textContent = "🔄 Call ended. Searching new partner...";
-      findPartner();
+      statusText.textContent = "🔄 Call ended. Search new partner by join chat...";
+      //findPartner();
     }
 
     socket.on("call-ended", () => {
