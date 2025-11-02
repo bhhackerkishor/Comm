@@ -4,68 +4,94 @@
   <meta charset="UTF-8" />
   <title>TalkPair 🎧</title>
   <style>
+    * {
+      box-sizing: border-box;
+      font-family: "Poppins", sans-serif;
+    }
     body {
-      font-family: Arial, sans-serif;
-      background: #f3f4f6;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      height: 100vh;
+      margin: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      color: #fff;
     }
-    .container {
-      background: white;
-      padding: 25px;
-      border-radius: 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      width: 320px;
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      padding: 30px;
+      border-radius: 20px;
+      width: 350px;
       text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
     h2 {
-      margin-bottom: 15px;
-      color: #111827;
+      font-size: 1.6rem;
+      margin-bottom: 10px;
     }
     input {
       width: 100%;
       padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      margin-bottom: 10px;
+      border: none;
+      border-radius: 10px;
+      outline: none;
+      margin-bottom: 15px;
+      text-align: center;
     }
     button {
       width: 100%;
       padding: 10px;
       border: none;
-      border-radius: 8px;
-      font-size: 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-top: 8px;
       cursor: pointer;
-      background: #2563eb;
-      color: white;
-      transition: background 0.3s;
+      transition: transform 0.2s ease, background 0.3s ease;
     }
     button:hover {
-      background: #1e40af;
+      transform: scale(1.03);
     }
-    button.end {
-      background: #dc2626;
-      margin-top: 10px;
+    #joinBtn {
+      background: #22c55e;
+      color: white;
+    }
+    #endBtn {
+      background: #ef4444;
+      color: white;
+      display: none;
+    }
+    #muteBtn {
+      background: #3b82f6;
+      color: white;
+      display: none;
+    }
+    #speakerBtn {
+      background: #a855f7;
+      color: white;
+      display: none;
     }
     p {
-      margin-top: 10px;
-      color: #374151;
+      margin-top: 12px;
+      color: #e2e8f0;
+      font-size: 14px;
     }
     audio {
-      margin-top: 15px;
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>TalkPair 🎧</h2>
+  <div class="card">
+    <h2>🎧 TalkPair</h2>
     <input id="name" placeholder="Enter your name" />
     <button id="joinBtn">Join Chat</button>
-    <button id="endBtn" class="end" style="display:none;">End Call</button>
-    <p id="status"></p>
+    <button id="muteBtn">🎤 Mute Mic</button>
+    <button id="speakerBtn">🔊 Speaker Off</button>
+    <button id="endBtn">❌ End Call</button>
+    <p id="status">Not connected</p>
     <audio id="remoteAudio" autoplay></audio>
+    <audio id="ringtone" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" loop></audio>
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -74,11 +100,16 @@
     const nameInput = document.getElementById("name");
     const joinBtn = document.getElementById("joinBtn");
     const endBtn = document.getElementById("endBtn");
+    const muteBtn = document.getElementById("muteBtn");
+    const speakerBtn = document.getElementById("speakerBtn");
     const statusText = document.getElementById("status");
     const remoteAudio = document.getElementById("remoteAudio");
+    const ringtone = document.getElementById("ringtone");
 
     let localStream;
     let peerConnection;
+    let isMuted = false;
+    let speakerOn = true;
     const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
     joinBtn.onclick = async () => {
@@ -90,13 +121,28 @@
 
     function findPartner() {
       socket.emit("find-partner");
-      statusText.textContent = "⏳ Looking for a partner...";
+      statusText.textContent = "⏳ Searching for a partner...";
       joinBtn.disabled = true;
+      ringtone.play();
     }
 
     endBtn.onclick = () => {
       endCall();
       socket.emit("end-call");
+    };
+
+    muteBtn.onclick = () => {
+      if (!localStream) return;
+      const track = localStream.getAudioTracks()[0];
+      track.enabled = !track.enabled;
+      isMuted = !isMuted;
+      muteBtn.textContent = isMuted ? "🔇 Unmute Mic" : "🎤 Mute Mic";
+    };
+
+    speakerBtn.onclick = () => {
+      speakerOn = !speakerOn;
+      remoteAudio.muted = !speakerOn;
+      speakerBtn.textContent = speakerOn ? "🔊 Speaker Off" : "🔈 Speaker On";
     };
 
     socket.on("waiting", msg => {
@@ -105,9 +151,13 @@
     });
 
     socket.on("partner-found", async ({ partnerId, partnerName }) => {
+      ringtone.pause();
+      ringtone.currentTime = 0;
       statusText.textContent = `🎤 Connected with ${partnerName}`;
       endBtn.style.display = "block";
-      await startCall(partnerId);
+      muteBtn.style.display = "block";
+      speakerBtn.style.display = "block";
+      await startCall();
     });
 
     socket.on("signal", async (data) => {
@@ -161,7 +211,10 @@
       }
       remoteAudio.srcObject = null;
       endBtn.style.display = "none";
-      statusText.textContent = "🔄 Call ended. Finding new partner...";
+      muteBtn.style.display = "none";
+      speakerBtn.style.display = "none";
+      joinBtn.disabled = false;
+      statusText.textContent = "🔄 Call ended. Searching new partner...";
       findPartner();
     }
 
@@ -170,7 +223,7 @@
     });
 
     socket.on("partner-left", () => {
-      statusText.textContent = "👋 Partner disconnected. Searching for new one...";
+      statusText.textContent = "👋 Partner disconnected. Searching again...";
       endCall();
     });
   </script>
