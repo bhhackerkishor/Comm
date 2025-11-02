@@ -124,34 +124,58 @@
     const localAudio = document.getElementById("localAudio");
     const remoteAudio = document.getElementById("remoteAudio");
 
-    let pc, localStream, partnerId, isMuted = false, speakerOn = true, timer, callStart;
+    let pc = null, localStream = null, partnerId = null,
+        isMuted = false, speakerOn = true, timer = null,
+        callStart = null, pendingCandidates = [];
 
     async function resetConnection() {
-      if (pc) { pc.ontrack = null; pc.onicecandidate = null; pc.close(); pc = null; }
-      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+      if (pc) {
+        pc.ontrack = null;
+        pc.onicecandidate = null;
+        pc.close();
+        pc = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
       partnerId = null;
       btnEnd.disabled = true;
       btnMute.disabled = true;
       btnSpeaker.disabled = true;
       btnMute.classList.remove("active");
       btnSpeaker.classList.remove("active");
+      btnMute.textContent = "🎤 Mic";
+      btnSpeaker.textContent = "🔊 Speaker";
       remoteAudio.srcObject = null;
       partnerEl.textContent = "";
-      clearInterval(timer);
+      isMuted = false;
+      speakerOn = true;
+      remoteAudio.muted = false;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
       timerEl.textContent = "";
+      pendingCandidates = [];
     }
 
     async function initPeer() {
-      pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localAudio.srcObject = localStream;
       localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
       pc.ontrack = e => { remoteAudio.srcObject = e.streams[0]; };
-      pc.onicecandidate = e => { if (e.candidate) socket.emit("signal", e.candidate); };
+      pc.onicecandidate = e => {
+        if (e.candidate) socket.emit("signal", e.candidate);
+      };
     }
 
     function startTimer() {
       callStart = Date.now();
+      if (timer) clearInterval(timer);
       timer = setInterval(() => {
         const diff = Math.floor((Date.now() - callStart) / 1000);
         const m = String(Math.floor(diff / 60)).padStart(2, "0");
@@ -165,13 +189,14 @@
       if (!name) return alert("Enter name first");
       socket.emit("register", name);
       statusEl.textContent = "✅ Registered as " + name;
+      btnRegister.disabled = true;
     };
 
     btnFind.onclick = async () => {
       await resetConnection();
-      socket.emit("find-partner");
       statusEl.textContent = "🔍 Finding partner...";
       statusEl.classList.remove("ringing");
+      socket.emit("find-partner");
     };
 
     socket.on("waiting", msg => statusEl.textContent = msg);
@@ -181,7 +206,6 @@
       partnerEl.textContent = "Partner: " + partnerName;
       statusEl.textContent = "📞 Ringing...";
       statusEl.classList.add("ringing");
-
       await initPeer();
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -196,6 +220,8 @@
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit("signal", answer);
+        pendingCandidates.forEach(c => pc.addIceCandidate(new RTCIceCandidate(c)));
+        pendingCandidates = [];
       } else if (data.type === "answer") {
         await pc.setRemoteDescription(new RTCSessionDescription(data));
         statusEl.textContent = "🟢 Connected";
@@ -204,8 +230,14 @@
         btnMute.disabled = false;
         btnSpeaker.disabled = false;
         startTimer();
+        pendingCandidates.forEach(c => pc.addIceCandidate(new RTCIceCandidate(c)));
+        pendingCandidates = [];
       } else if (data.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(data));
+        if (pc && pc.remoteDescription) {
+          await pc.addIceCandidate(new RTCIceCandidate(data));
+        } else {
+          pendingCandidates.push(data);
+        }
       }
     });
 
