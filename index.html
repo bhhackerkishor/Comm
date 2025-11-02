@@ -2,29 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TalkPair Voice Chat</title>
+  <title>TalkPair 🎧</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f9fafc;
+      background: #f3f4f6;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
     }
-    .box {
+    .container {
       background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      width: 320px;
       text-align: center;
-      width: 300px;
     }
-    input, button {
-      margin: 10px 0;
-      padding: 10px;
+    h2 {
+      margin-bottom: 15px;
+      color: #111827;
+    }
+    input {
       width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #1e40af;
+    }
+    button.end {
+      background: #dc2626;
+      margin-top: 10px;
+    }
+    p {
+      margin-top: 10px;
+      color: #374151;
     }
     audio {
       margin-top: 15px;
@@ -32,10 +59,11 @@
   </style>
 </head>
 <body>
-  <div class="box">
+  <div class="container">
     <h2>TalkPair 🎧</h2>
     <input id="name" placeholder="Enter your name" />
     <button id="joinBtn">Join Chat</button>
+    <button id="endBtn" class="end" style="display:none;">End Call</button>
     <p id="status"></p>
     <audio id="remoteAudio" autoplay></audio>
   </div>
@@ -45,6 +73,7 @@
     const socket = io("https://server-09p9.onrender.com");
     const nameInput = document.getElementById("name");
     const joinBtn = document.getElementById("joinBtn");
+    const endBtn = document.getElementById("endBtn");
     const statusText = document.getElementById("status");
     const remoteAudio = document.getElementById("remoteAudio");
 
@@ -56,23 +85,33 @@
       const name = nameInput.value.trim();
       if (!name) return alert("Enter name first");
       socket.emit("register", name);
+      findPartner();
+    };
+
+    function findPartner() {
       socket.emit("find-partner");
       statusText.textContent = "⏳ Looking for a partner...";
+      joinBtn.disabled = true;
+    }
+
+    endBtn.onclick = () => {
+      endCall();
+      socket.emit("end-call");
     };
 
     socket.on("waiting", msg => {
       statusText.textContent = msg;
+      endBtn.style.display = "none";
     });
 
     socket.on("partner-found", async ({ partnerId, partnerName }) => {
       statusText.textContent = `🎤 Connected with ${partnerName}`;
+      endBtn.style.display = "block";
       await startCall(partnerId);
     });
 
     socket.on("signal", async (data) => {
-      if (!peerConnection) {
-        peerConnection = createPeerConnection();
-      }
+      if (!peerConnection) peerConnection = createPeerConnection();
 
       if (data.sdp) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -90,43 +129,50 @@
       }
     });
 
-    async function startCall(partnerId) {
+    async function startCall() {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       peerConnection = createPeerConnection();
-
       localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
-
       socket.emit("signal", { sdp: peerConnection.localDescription });
     }
 
     function createPeerConnection() {
       const pc = new RTCPeerConnection(config);
-
-      pc.onicecandidate = event => {
-        if (event.candidate) {
-          socket.emit("signal", { candidate: event.candidate });
-        }
+      pc.onicecandidate = (event) => {
+        if (event.candidate) socket.emit("signal", { candidate: event.candidate });
       };
-
-      pc.ontrack = event => {
+      pc.ontrack = (event) => {
         remoteAudio.srcObject = event.streams[0];
       };
-
       return pc;
     }
 
+    function endCall() {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      remoteAudio.srcObject = null;
+      endBtn.style.display = "none";
+      statusText.textContent = "🔄 Call ended. Finding new partner...";
+      findPartner();
+    }
+
     socket.on("call-ended", () => {
-      statusText.textContent = "❌ Call ended.";
-      if (peerConnection) peerConnection.close();
+      endCall();
     });
 
     socket.on("partner-left", () => {
-      statusText.textContent = "👋 Partner disconnected.";
-      if (peerConnection) peerConnection.close();
+      statusText.textContent = "👋 Partner disconnected. Searching for new one...";
+      endCall();
     });
   </script>
 </body>
-</html> 
+</html>
