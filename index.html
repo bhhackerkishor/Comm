@@ -1,292 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple WebRTC Matchmaker</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
-        #status-area { margin-bottom: 20px; padding: 10px; border-radius: 5px; background-color: #e3f2fd; color: #1565c0; font-weight: bold; }
-        .controls, .video-container { margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #fff; }
-        button { padding: 10px 15px; margin-right: 10px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; }
-        button:hover:not(:disabled) { background-color: #45a049; }
-        video { width: 45%; height: auto; border: 1px solid #333; margin: 5px; background-color: black; border-radius: 5px; }
-        .hidden { display: none; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>TalkPair</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: Poppins, sans-serif;
+      background: linear-gradient(145deg, #1a1c1f, #24262b);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 1rem;
+    }
+    input, button {
+      padding: 10px 15px;
+      border-radius: 6px;
+      border: none;
+      outline: none;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    #log {
+      width: 80%;
+      max-width: 400px;
+      background: #333;
+      padding: 10px;
+      border-radius: 8px;
+      height: 200px;
+      overflow-y: auto;
+      font-size: 14px;
+    }
+    video {
+      width: 45%;
+      border-radius: 10px;
+      background: #000;
+    }
+  </style>
 </head>
 <body>
+  <h2>🎙️ TalkPair</h2>
+  <input id="name" placeholder="Enter your name" />
+  <button id="registerBtn">Register</button>
+  <button id="findBtn" disabled>Find Partner</button>
+  <button id="endBtn" disabled>End Call</button>
+  <div id="log"></div>
 
-    <h1>🤝 Random Video Chat</h1>
+  <div style="display:flex; gap:10px; margin-top:20px;">
+    <video id="localVideo" autoplay muted></video>
+    <video id="remoteVideo" autoplay></video>
+  </div>
 
-    <div id="status-area">Status: Not Connected</div>
+  <script>
+    const socket = io("https://server-09p9.onrender.com");
+    const log = (msg) => {
+      const el = document.createElement("div");
+      el.textContent = msg;
+      document.getElementById("log").appendChild(el);
+    };
 
-    <div id="register-section">
-        <input type="text" id="username-input" placeholder="Enter your name" value="User_A">
-        <button onclick="registerUser()">Register</button>
-    </div>
+    const nameInput = document.getElementById("name");
+    const registerBtn = document.getElementById("registerBtn");
+    const findBtn = document.getElementById("findBtn");
+    const endBtn = document.getElementById("endBtn");
 
-    <div class="controls " id="call-controls">
-        <button onclick="findPartner()" id="find-btn">Find Partner</button>
-        <button onclick="endCall()" id="end-btn" disabled>End Call</button>
-    </div>
+    let peerConnection;
+    let localStream;
 
-    <div class="video-container " id="video-area">
-        <h3>Current Partner: <span id="partner-name">...</span></h3>
-        <video id="local-video" autoplay muted></video>
-        <video id="remote-video" autoplay></video>
-    </div>
+    registerBtn.onclick = () => {
+      const name = nameInput.value.trim();
+      if (name) {
+        socket.emit("register", name);
+        findBtn.disabled = false;
+      }
+    };
 
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script>
-        // --- Configuration ---
-        const SERVER_URL = "https://server-09p9.onrender.com"; 
-        const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }]; 
+    findBtn.onclick = () => {
+      socket.emit("find-partner");
+      findBtn.disabled = true;
+    };
 
-        // --- Global State ---
-        let socket;
-        let peerConnection;
-        let localStream;
-        let isInitiator = false;
-        let iceCandidateQueue = []; // <-- THE CRITICAL FIX: Queue for early ICE candidates
+    endBtn.onclick = () => {
+      socket.emit("end-call");
+      endBtn.disabled = true;
+      findBtn.disabled = false;
+    };
 
-        // --- DOM Elements (omitted for brevity) ---
-        const statusArea = document.getElementById('status-area');
-        const registerSection = document.getElementById('register-section');
-        const callControls = document.getElementById('call-controls');
-        const videoArea = document.getElementById('video-area');
-        const localVideo = document.getElementById('local-video');
-        const remoteVideo = document.getElementById('remote-video');
-        const partnerNameEl = document.getElementById('partner-name');
-        const findButton = document.getElementById('find-btn');
-        const endButton = document.getElementById('end-btn');
+    socket.on("status", log);
+    socket.on("waiting", log);
+    socket.on("partner-left", () => log("Partner left"));
+    socket.on("call-ended", () => log("Call ended"));
+    
+    socket.on("partner-found", async ({ partnerName }) => {
+      log("Partner found: " + partnerName);
+      endBtn.disabled = false;
 
-        // --- Utility & UI Functions ---
-        function updateStatus(message) {
-            statusArea.innerHTML = `Status: **${message}**`;
+      // Setup WebRTC
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById("localVideo").srcObject = localStream;
+
+      peerConnection = new RTCPeerConnection();
+      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      peerConnection.ontrack = (event) => {
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+      };
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit("signal", { candidate: event.candidate });
         }
+      };
 
-        function showCallUI(partnerName) {
-            registerSection.classList.add('hidden');
-            callControls.classList.remove('hidden');
-            videoArea.classList.remove('hidden');
-            findButton.disabled = true;
-            endButton.disabled = false;
-            partnerNameEl.textContent = partnerName;
-            updateStatus("In call with " + partnerName);
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit("signal", { offer });
+    });
+
+    socket.on("signal", async (data) => {
+      if (data.offer) {
+        if (!peerConnection) {
+          localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          document.getElementById("localVideo").srcObject = localStream;
+
+          peerConnection = new RTCPeerConnection();
+          localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+          peerConnection.ontrack = (event) => {
+            document.getElementById("remoteVideo").srcObject = event.streams[0];
+          };
+          peerConnection.onicecandidate = (event) => {
+            if (event.candidate) socket.emit("signal", { candidate: event.candidate });
+          };
         }
-
-        function resetUI(message = "Registered and Ready") {
-            registerSection.classList.remove('hidden');
-            callControls.classList.remove('hidden');
-            videoArea.classList.remove('hidden');
-            findButton.disabled = false;
-            endButton.disabled = true;
-            if (localVideo) localVideo.srcObject = null;
-            if (remoteVideo) remoteVideo.srcObject = null;
-            partnerNameEl.textContent = "...";
-            updateStatus(message);
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit("signal", { answer });
+      } else if (data.answer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      } else if (data.candidate) {
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) {
+          console.error("Error adding received ICE candidate", e);
         }
-
-        // --- Socket.IO Handlers ---
-        function initSocket() {
-            socket = io(SERVER_URL);
-
-            socket.on("connect", () => {
-                updateStatus("Connected to server. Please register your name.");
-            });
-
-            socket.on("status", (msg) => {
-                updateStatus(msg);
-                if (msg.startsWith("Registered")) {
-                    resetUI(msg);
-                }
-            });
-
-            socket.on("waiting", (msg) => {
-                updateStatus(msg);
-                findButton.disabled = true;
-            });
-
-            socket.on("partner-found", async ({ partnerId, partnerName }) => {
-                showCallUI(partnerName);
-                
-                await setupPeerConnection();
-                
-                // Only the client marked as initiator creates the Offer
-                if (isInitiator) { 
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    socket.emit("signal", { sdp: peerConnection.localDescription });
-                    console.log("WebRTC Offer sent.");
-                }
-            });
-
-            // Handles the WebRTC signaling data from the partner via the server
-            socket.on("signal", async (data) => {
-                if (!peerConnection) {
-                    await setupPeerConnection();
-                }
-
-                if (data.sdp) {
-                    const sdp = new RTCSessionDescription(data.sdp);
-                    
-                    // 1. SET THE REMOTE DESCRIPTION FIRST
-                    try {
-                        await peerConnection.setRemoteDescription(sdp);
-                    } catch (e) {
-                        console.error("Failed to set remote description:", e);
-                        // Often occurs if the Answer arrives when state is 'stable'
-                        return; 
-                    }
-
-                    if (sdp.type === 'offer') {
-                        // Received an Offer, now create and send the Answer
-                        const answer = await peerConnection.createAnswer();
-                        await peerConnection.setLocalDescription(answer);
-                        socket.emit("signal", { sdp: peerConnection.localDescription });
-                        console.log("WebRTC Answer sent.");
-                    }
-                    
-                    // 2. PROCESS QUEUED ICE CANDIDATES (THE FIX)
-                    console.log(`Processing ${iceCandidateQueue.length} queued ICE candidates.`);
-                    while (iceCandidateQueue.length > 0) {
-                        const candidate = iceCandidateQueue.shift();
-                        try {
-                            await peerConnection.addIceCandidate(candidate);
-                        } catch (e) {
-                            console.error("Error adding queued ICE candidate:", e);
-                        }
-                    }
-
-                } else if (data.ice) {
-                    // Received an ICE candidate
-                    const candidate = new RTCIceCandidate(data.ice);
-                    
-                    // CHECK: Is the remote description set?
-                    if (peerConnection.remoteDescription && peerConnection.remoteDescription.sdp) {
-                        // Yes, process immediately
-                        try {
-                            await peerConnection.addIceCandidate(candidate);
-                        } catch (e) {
-                            console.error("Error adding received ICE candidate:", e);
-                        }
-                    } else {
-                        // No, push it to the queue for later processing
-                        console.log("Queuing ICE candidate...");
-                        iceCandidateQueue.push(candidate);
-                    }
-                }
-            });
-
-            socket.on("call-ended", () => {
-                cleanupCall("Partner ended the call.");
-            });
-
-            socket.on("partner-left", () => {
-                cleanupCall("Partner disconnected from the server.");
-            });
-
-            socket.on("disconnect", () => {
-                cleanupCall("Lost connection to the signaling server.");
-            });
-        }
-
-        // --- WebRTC Core Functions ---
-
-        async function getMedia() {
-            if (localStream) return localStream; // Avoid requesting media multiple times
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localVideo.srcObject = localStream;
-                return localStream;
-            } catch (err) {
-                console.error("Error getting media stream (camera/mic):", err);
-                updateStatus(`ERROR: Cannot access camera/mic. ${err.message}`);
-                throw err;
-            }
-        }
-
-        async function setupPeerConnection() {
-            if (peerConnection) peerConnection.close();
-            
-            await getMedia(); 
-
-            peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-            
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-            peerConnection.ontrack = (event) => {
-                if (remoteVideo.srcObject !== event.streams[0]) {
-                    remoteVideo.srcObject = event.streams[0];
-                    console.log('Received remote stream');
-                }
-            };
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    socket.emit("signal", { ice: event.candidate });
-                }
-            };
-            
-            peerConnection.oniceconnectionstatechange = () => {
-                 console.log('ICE connection state:', peerConnection.iceConnectionState);
-                 updateStatus(`ICE Status: ${peerConnection.iceConnectionState}`);
-            };
-        }
-
-        function cleanupCall(message) {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            if (peerConnection) {
-                peerConnection.close();
-            }
-            localStream = null;
-            peerConnection = null;
-            isInitiator = false;
-            iceCandidateQueue = []; // Reset the queue
-            resetUI(message);
-        }
-
-        // --- User Actions ---
-        function registerUser() {
-            const name = document.getElementById('username-input').value.trim();
-            if (!name) return alert("Please enter a name.");
-            
-            if (!socket) initSocket();
-            
-            if (socket && socket.connected) {
-                socket.emit("register", name);
-            } else {
-                updateStatus("Connecting to server... Please wait a moment.");
-            }
-        }
-
-        function findPartner() {
-            if (!socket || !socket.connected) {
-                return updateStatus("Not connected to server!");
-            }
-            
-            // The first user to click will be marked as the initiator for the SDP exchange
-            if (!isInitiator) {
-                isInitiator = true; 
-            }
-            
-            updateStatus("Searching for a partner...");
-            findButton.disabled = true;
-            socket.emit("find-partner");
-        }
-
-        function endCall() {
-            if (socket && socket.connected) {
-                socket.emit("end-call");
-            }
-            cleanupCall("Call manually ended.");
-        }
-
-        // Initialize socket on page load
-        document.addEventListener('DOMContentLoaded', initSocket);
-
-    </script>
+      }
+    });
+  </script>
 </body>
 </html>
