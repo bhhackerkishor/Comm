@@ -77,8 +77,8 @@
 
         function resetUI(message = "Registered and Ready") {
             registerSection.classList.remove('hidden');
-            callControls.classList.add('hidden');
-            videoArea.classList.add('hidden');
+            callControls.classList.remove('hidden');
+            videoArea.classList.remove('hidden');
             findButton.disabled = false;
             endButton.disabled = true;
             if (localVideo) localVideo.srcObject = null;
