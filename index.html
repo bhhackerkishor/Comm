@@ -101,6 +101,7 @@
                 updateStatus(msg);
                 if (msg.startsWith("Registered")) {
                     resetUI(msg);
+                    console.log("working");
                 }
             });
 
@@ -110,7 +111,7 @@
             });
 
             socket.on("partner-found", async ({ partnerId, partnerName }) => {
-                showCallUI(partnerName);
+                
                 
                 // If we initiated the search (isInitiator is true), we make the Offer
                 await setupPeerConnection();
