@@ -2,235 +2,186 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TalkPair 🎧</title>
+  <title>FluComm</title>
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: "Poppins", sans-serif;
-    }
     body {
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-      height: 100vh;
-      margin: 0;
+      background: #0e0e10;
+      color: #f0f0f0;
+      font-family: Poppins, sans-serif;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #fff;
+      height: 100vh;
+      gap: 15px;
     }
-    .card {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(20px);
-      padding: 30px;
-      border-radius: 20px;
-      width: 360px;
-      text-align: center;
-      box-shadow: 0 6px 25px rgba(0,0,0,0.4);
-      transition: transform 0.3s ease;
-    }
-    .card:hover {
-      transform: scale(1.02);
-    }
-    h2 {
-      font-size: 1.6rem;
-      margin-bottom: 10px;
-      color: #f8fafc;
-    }
-    input {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 10px;
-      outline: none;
-      margin-bottom: 15px;
-      text-align: center;
-      font-size: 15px;
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
     }
     button {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 10px;
-      font-size: 15px;
-      margin-top: 8px;
+      background: #1f1f22;
+      color: white;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 15px;
       cursor: pointer;
-      transition: transform 0.2s ease, background 0.3s ease;
+      font-size: 15px;
     }
     button:hover {
-      transform: scale(1.03);
+      background: #29292d;
     }
-    #joinBtn { background: #22c55e; color: white; }
-    #nextBtn { background: #facc15; color: #111; display: none; }
-    #endBtn { background: #ef4444; color: white; display: none; }
-    #muteBtn { background: #3b82f6; color: white; display: none; }
-    #speakerBtn { background: #a855f7; color: white; display: none; }
-    p {
-      margin-top: 12px;
-      color: #e2e8f0;
-      font-size: 14px;
-      min-height: 22px;
+    #status {
+      color: #aaa;
+      margin-top: 10px;
     }
-    audio {
-      display: none;
+    .ringing {
+      animation: blink 1s infinite;
+      color: #ff9800;
+    }
+    @keyframes blink {
+      50% { opacity: 0.3; }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>🎧 TalkPair</h2>
-    <input id="name" placeholder="Enter your name" />
-    <button id="joinBtn">Join Chat</button>
-    <button id="nextBtn">⏭️ Next Partner</button>
-    <button id="muteBtn">🎤 Mute Mic</button>
-    <button id="speakerBtn">🔊 Speaker Off</button>
-    <button id="endBtn">❌ End Call</button>
-    <p id="status">Not connected</p>
-
-    <audio id="remoteAudio" autoplay></audio>
-    <audio id="ringtone" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" loop></audio>
+  <h1>🎙️ TalkPair</h1>
+  <input id="name" placeholder="Enter your name" />
+  <div class="controls">
+    <button id="register">Register</button>
+    <button id="find">Find Partner</button>
+    <button id="end" disabled>End Call</button>
+    <button id="mute" disabled>Mute</button>
+    <button id="speaker" disabled>Speaker</button>
   </div>
+  <p id="status">Not connected</p>
 
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <audio id="localAudio" autoplay muted></audio>
+  <audio id="remoteAudio" autoplay></audio>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
-    const socket = io("https://server-09p9.onrender.com");
+    const socket = io("http://localhost:5000"); // change if hosted
+    const statusEl = document.getElementById("status");
     const nameInput = document.getElementById("name");
-    const joinBtn = document.getElementById("joinBtn");
-    const nextBtn = document.getElementById("nextBtn");
-    const endBtn = document.getElementById("endBtn");
-    const muteBtn = document.getElementById("muteBtn");
-    const speakerBtn = document.getElementById("speakerBtn");
-    const statusText = document.getElementById("status");
+    const btnRegister = document.getElementById("register");
+    const btnFind = document.getElementById("find");
+    const btnEnd = document.getElementById("end");
+    const btnMute = document.getElementById("mute");
+    const btnSpeaker = document.getElementById("speaker");
+    const localAudio = document.getElementById("localAudio");
     const remoteAudio = document.getElementById("remoteAudio");
-    const ringtone = document.getElementById("ringtone");
 
-    let localStream;
-    let peerConnection;
-    let isMuted = false;
-    let speakerOn = true;
-    const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    let pc, localStream, partnerId, isMuted = false, speakerOn = true;
 
-    joinBtn.onclick = async () => {
-      const name = nameInput.value.trim();
-      if (!name) return alert("Enter your name first!");
-      socket.emit("register", name);
-      findPartner();
-    };
-
-    nextBtn.onclick = () => {
-      statusText.textContent = "⏭️ Finding new partner...";
-      socket.emit("end-call");
-      endCall(true);
-    };
-
-    function findPartner() {
-      socket.emit("find-partner");
-      statusText.textContent = "🔍 Searching for a partner...";
-      ringtone.play();
-      joinBtn.disabled = true;
-    }
-
-    endBtn.onclick = () => {
-      socket.emit("end-call");
-      endCall(false);
-      statusText.textContent = "❌ Call ended. Click Join to reconnect.";
-      joinBtn.disabled = false;
-    };
-
-    muteBtn.onclick = () => {
-      if (!localStream) return;
-      const track = localStream.getAudioTracks()[0];
-      track.enabled = !track.enabled;
-      isMuted = !isMuted;
-      muteBtn.textContent = isMuted ? "🔇 Unmute Mic" : "🎤 Mute Mic";
-    };
-
-    speakerBtn.onclick = () => {
-      speakerOn = !speakerOn;
-      remoteAudio.muted = !speakerOn;
-      speakerBtn.textContent = speakerOn ? "🔊 Speaker Off" : "🔈 Speaker On";
-    };
-
-    socket.on("waiting", msg => {
-      statusText.textContent = msg;
-    });
-
-    socket.on("partner-found", async ({ partnerId, partnerName }) => {
-      ringtone.pause();
-      ringtone.currentTime = 0;
-      statusText.textContent = `🎤 Connected with ${partnerName}`;
-      toggleControls(true);
-      await startCall();
-    });
-
-    socket.on("signal", async (data) => {
-      if (!peerConnection) peerConnection = createPeerConnection();
-
-      if (data.sdp) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        if (data.sdp.type === "offer") {
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          socket.emit("signal", { sdp: peerConnection.localDescription });
-        }
-      } else if (data.candidate) {
-        try {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (err) {
-          console.error("ICE candidate error:", err);
-        }
-      }
-    });
-
-    async function startCall() {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      peerConnection = createPeerConnection();
-      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit("signal", { sdp: peerConnection.localDescription });
-    }
-
-    function createPeerConnection() {
-      const pc = new RTCPeerConnection(config);
-      pc.onicecandidate = (event) => {
-        if (event.candidate) socket.emit("signal", { candidate: event.candidate });
-      };
-      pc.ontrack = (event) => {
-        remoteAudio.srcObject = event.streams[0];
-      };
-      return pc;
-    }
-
-    function endCall(autoReconnect) {
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
+    async function resetConnection() {
+      if (pc) {
+        pc.ontrack = null;
+        pc.onicecandidate = null;
+        pc.close();
+        pc = null;
       }
       if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
+        localStream.getTracks().forEach(t => t.stop());
         localStream = null;
       }
+      partnerId = null;
+      btnEnd.disabled = true;
+      btnMute.disabled = true;
+      btnSpeaker.disabled = true;
       remoteAudio.srcObject = null;
-      toggleControls(false);
-      if (autoReconnect) findPartner();
     }
 
-    socket.on("call-ended", () => {
-      endCall(true);
-      statusText.textContent = "📞 Partner ended call. Finding new...";
-    });
+    async function initPeer() {
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
 
-    socket.on("partner-left", () => {
-      endCall(true);
-      statusText.textContent = "👋 Partner disconnected. Finding new...";
-    });
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localAudio.srcObject = localStream;
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    function toggleControls(active) {
-      endBtn.style.display = active ? "block" : "none";
-      muteBtn.style.display = active ? "block" : "none";
-      speakerBtn.style.display = active ? "block" : "none";
-      nextBtn.style.display = active ? "block" : "none";
+      pc.ontrack = e => { remoteAudio.srcObject = e.streams[0]; };
+      pc.onicecandidate = e => {
+        if (e.candidate) socket.emit("signal", e.candidate);
+      };
     }
+
+    btnRegister.onclick = () => {
+      const name = nameInput.value.trim();
+      if (!name) return alert("Enter name first");
+      socket.emit("register", name);
+      statusEl.textContent = "✅ Registered as " + name;
+    };
+
+    btnFind.onclick = async () => {
+      await resetConnection();
+      socket.emit("find-partner");
+      statusEl.textContent = "🔍 Finding partner...";
+    };
+
+    socket.on("waiting", msg => statusEl.textContent = msg);
+
+    socket.on("partner-found", async ({ partnerId: id, partnerName }) => {
+      partnerId = id;
+      statusEl.textContent = "📞 Ringing with " + partnerName;
+      statusEl.classList.add("ringing");
+
+      await initPeer();
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("signal", offer);
+    });
+
+    socket.on("signal", async data => {
+      if (!pc) await initPeer();
+
+      if (data.type === "offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("signal", answer);
+      } else if (data.type === "answer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        statusEl.textContent = "🟢 Connected";
+        statusEl.classList.remove("ringing");
+        btnEnd.disabled = false;
+        btnMute.disabled = false;
+        btnSpeaker.disabled = false;
+      } else if (data.candidate) {
+        await pc.addIceCandidate(new RTCIceCandidate(data));
+      }
+    });
+
+    btnEnd.onclick = async () => {
+      socket.emit("end-call");
+      await resetConnection();
+      statusEl.textContent = "❌ Call ended. Click Find to reconnect.";
+    };
+
+    socket.on("call-ended", async () => {
+      await resetConnection();
+      statusEl.textContent = "📴 Partner ended the call.";
+    });
+
+    socket.on("partner-left", async () => {
+      await resetConnection();
+      statusEl.textContent = "🔴 Partner disconnected.";
+    });
+
+    btnMute.onclick = () => {
+      if (!localStream) return;
+      isMuted = !isMuted;
+      localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+      btnMute.textContent = isMuted ? "Unmute" : "Mute";
+    };
+
+    btnSpeaker.onclick = () => {
+      speakerOn = !speakerOn;
+      remoteAudio.muted = !speakerOn;
+      btnSpeaker.textContent = speakerOn ? "Speaker Off" : "Speaker On";
+    };
   </script>
 </body>
 </html>
