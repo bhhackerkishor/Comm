@@ -22,13 +22,18 @@
       backdrop-filter: blur(20px);
       padding: 30px;
       border-radius: 20px;
-      width: 350px;
+      width: 360px;
       text-align: center;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      box-shadow: 0 6px 25px rgba(0,0,0,0.4);
+      transition: transform 0.3s ease;
+    }
+    .card:hover {
+      transform: scale(1.02);
     }
     h2 {
       font-size: 1.6rem;
       margin-bottom: 10px;
+      color: #f8fafc;
     }
     input {
       width: 100%;
@@ -38,6 +43,7 @@
       outline: none;
       margin-bottom: 15px;
       text-align: center;
+      font-size: 15px;
     }
     button {
       width: 100%;
@@ -52,29 +58,16 @@
     button:hover {
       transform: scale(1.03);
     }
-    #joinBtn {
-      background: #22c55e;
-      color: white;
-    }
-    #endBtn {
-      background: #ef4444;
-      color: white;
-      display: none;
-    }
-    #muteBtn {
-      background: #3b82f6;
-      color: white;
-      display: none;
-    }
-    #speakerBtn {
-      background: #a855f7;
-      color: white;
-      display: none;
-    }
+    #joinBtn { background: #22c55e; color: white; }
+    #nextBtn { background: #facc15; color: #111; display: none; }
+    #endBtn { background: #ef4444; color: white; display: none; }
+    #muteBtn { background: #3b82f6; color: white; display: none; }
+    #speakerBtn { background: #a855f7; color: white; display: none; }
     p {
       margin-top: 12px;
       color: #e2e8f0;
       font-size: 14px;
+      min-height: 22px;
     }
     audio {
       display: none;
@@ -86,19 +79,22 @@
     <h2>🎧 TalkPair</h2>
     <input id="name" placeholder="Enter your name" />
     <button id="joinBtn">Join Chat</button>
+    <button id="nextBtn">⏭️ Next Partner</button>
     <button id="muteBtn">🎤 Mute Mic</button>
     <button id="speakerBtn">🔊 Speaker Off</button>
     <button id="endBtn">❌ End Call</button>
     <p id="status">Not connected</p>
+
     <audio id="remoteAudio" autoplay></audio>
     <audio id="ringtone" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" loop></audio>
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    const socket = io("https://server-09p9.onrender.com");
+    const socket = io("http://localhost:5000");
     const nameInput = document.getElementById("name");
     const joinBtn = document.getElementById("joinBtn");
+    const nextBtn = document.getElementById("nextBtn");
     const endBtn = document.getElementById("endBtn");
     const muteBtn = document.getElementById("muteBtn");
     const speakerBtn = document.getElementById("speakerBtn");
@@ -114,21 +110,29 @@
 
     joinBtn.onclick = async () => {
       const name = nameInput.value.trim();
-      if (!name) return alert("Enter name first");
+      if (!name) return alert("Enter your name first!");
       socket.emit("register", name);
       findPartner();
     };
 
+    nextBtn.onclick = () => {
+      statusText.textContent = "⏭️ Finding new partner...";
+      socket.emit("end-call");
+      endCall(true);
+    };
+
     function findPartner() {
       socket.emit("find-partner");
-      statusText.textContent = "⏳ Searching for a partner...";
-      joinBtn.disabled = true;
+      statusText.textContent = "🔍 Searching for a partner...";
       ringtone.play();
+      joinBtn.disabled = true;
     }
 
     endBtn.onclick = () => {
-      endCall();
       socket.emit("end-call");
+      endCall(false);
+      statusText.textContent = "❌ Call ended. Click Join to reconnect.";
+      joinBtn.disabled = false;
     };
 
     muteBtn.onclick = () => {
@@ -147,16 +151,13 @@
 
     socket.on("waiting", msg => {
       statusText.textContent = msg;
-      endBtn.style.display = "none";
     });
 
     socket.on("partner-found", async ({ partnerId, partnerName }) => {
       ringtone.pause();
       ringtone.currentTime = 0;
       statusText.textContent = `🎤 Connected with ${partnerName}`;
-      endBtn.style.display = "block";
-      muteBtn.style.display = "block";
-      speakerBtn.style.display = "block";
+      toggleControls(true);
       await startCall();
     });
 
@@ -174,7 +175,7 @@
         try {
           await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (err) {
-          console.error("Error adding ice candidate:", err);
+          console.error("ICE candidate error:", err);
         }
       }
     });
@@ -200,7 +201,7 @@
       return pc;
     }
 
-    function endCall() {
+    function endCall(autoReconnect) {
       if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
@@ -210,22 +211,26 @@
         localStream = null;
       }
       remoteAudio.srcObject = null;
-      endBtn.style.display = "none";
-      muteBtn.style.display = "none";
-      speakerBtn.style.display = "none";
-      joinBtn.disabled = false;
-      statusText.textContent = "🔄 Call ended. Search new partner by join chat...";
-      //findPartner();
+      toggleControls(false);
+      if (autoReconnect) findPartner();
     }
 
     socket.on("call-ended", () => {
-      endCall();
+      endCall(true);
+      statusText.textContent = "📞 Partner ended call. Finding new...";
     });
 
     socket.on("partner-left", () => {
-      statusText.textContent = "👋 Partner disconnected. Searching again...";
-      endCall();
+      endCall(true);
+      statusText.textContent = "👋 Partner disconnected. Finding new...";
     });
+
+    function toggleControls(active) {
+      endBtn.style.display = active ? "block" : "none";
+      muteBtn.style.display = active ? "block" : "none";
+      speakerBtn.style.display = active ? "block" : "none";
+      nextBtn.style.display = active ? "block" : "none";
+    }
   </script>
 </body>
 </html>
