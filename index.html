@@ -16,11 +16,10 @@
       align-items: center;
       height: 100vh;
     }
-
     .card {
       background: #1e2227;
       border-radius: 20px;
-      box-shadow: 0 6px 40px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 6px 40px rgba(0,0,0,0.4);
       padding: 25px 30px;
       width: 430px;
       max-width: 95%;
@@ -30,12 +29,7 @@
       text-align: center;
       gap: 18px;
     }
-
-    h2 {
-      font-size: 26px;
-      font-weight: 600;
-    }
-
+    h2 { font-size: 26px; font-weight: 600; }
     input {
       padding: 10px 15px;
       border-radius: 8px;
@@ -45,7 +39,6 @@
       outline: none;
       font-size: 15px;
     }
-
     button {
       background: #0078ff;
       border: none;
@@ -56,83 +49,42 @@
       font-size: 15px;
       transition: all 0.25s;
     }
-
     button:hover:not(:disabled) {
       background: #0064d3;
       transform: translateY(-1px);
     }
-
     button:disabled {
       background: #444;
       cursor: not-allowed;
     }
-
     .controls {
       display: flex;
       gap: 15px;
       justify-content: center;
       flex-wrap: wrap;
     }
-
     .icon-btn {
-      width: 55px;
-      height: 55px;
-      border-radius: 50%;
-      border: none;
-      font-size: 22px;
-      background: #2b2f36;
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 55px; height: 55px; border-radius: 50%;
+      border: none; font-size: 22px;
+      background: #2b2f36; color: white;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
       transition: background 0.3s, transform 0.15s;
     }
-
-    .icon-btn:hover {
-      background: #3a3f47;
-      transform: scale(1.05);
-    }
-
-    .icon-btn.active {
-      background: #e53935;
-    }
-
+    .icon-btn:hover { background: #3a3f47; transform: scale(1.05); }
+    .icon-btn.active { background: #e53935; }
     #videos {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      width: 100%;
-      margin-top: 10px;
+      display: flex; justify-content: space-between; gap: 10px; width: 100%; margin-top: 10px;
     }
-
     video {
-      width: 48%;
-      border-radius: 12px;
-      background: black;
-      object-fit: cover;
-      aspect-ratio: 4/3;
+      width: 48%; border-radius: 12px; background: black; object-fit: cover; aspect-ratio: 4/3;
     }
-
     #log {
-      font-size: 14px;
-      background: #121417;
-      padding: 10px;
-      border-radius: 10px;
-      height: 100px;
-      overflow-y: auto;
-      width: 100%;
-      text-align: left;
-      scrollbar-width: thin;
+      font-size: 14px; background: #121417; padding: 10px; border-radius: 10px;
+      height: 100px; overflow-y: auto; width: 100%; text-align: left; scrollbar-width: thin;
     }
-
-    @media (max-width: 600px) {
-      #videos {
-        flex-direction: column;
-      }
-      video {
-        width: 100%;
-      }
+    @media (max-width:600px) {
+      #videos { flex-direction: column; }
+      video { width: 100%; }
     }
   </style>
 </head>
@@ -145,18 +97,15 @@
       <button id="findBtn" disabled>Find Partner</button>
       <button id="endBtn" disabled>End</button>
     </div>
-
     <div id="videos">
       <video id="localVideo" autoplay muted playsinline></video>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
-
     <div class="controls">
       <button id="micBtn" class="icon-btn">🎤</button>
       <button id="camBtn" class="icon-btn">🎥</button>
       <button id="speakerBtn" class="icon-btn">🔈</button>
     </div>
-
     <div id="log"></div>
   </div>
 
@@ -173,10 +122,8 @@
 
     let peerConnection;
     let localStream;
-    let partnerId;
-    let micOn = true;
-    let camOn = true;
-    let speakerOn = true;
+    let partnerId = null;
+    let micOn = true, camOn = true, speakerOn = true;
     let pendingCandidates = [];
 
     const log = (msg) => {
@@ -192,32 +139,32 @@
         socket.emit("register", name);
         findBtn.disabled = false;
         registerBtn.disabled = true;
+        log("✅ Registered as " + name);
       }
     };
 
     findBtn.onclick = () => {
       socket.emit("find-partner");
       findBtn.disabled = true;
+      log("🔍 Searching for partner...");
     };
 
     endBtn.onclick = () => {
-      socket.emit("end-call");
+      socket.emit("end-call", { partnerId });
       cleanup();
-      log("📞 Call ended by you.");
+      log("📞 You ended the call.");
     };
 
     micBtn.onclick = () => {
       micOn = !micOn;
-      if (localStream)
-        localStream.getAudioTracks().forEach(track => track.enabled = micOn);
+      if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = micOn);
       micBtn.classList.toggle("active", !micOn);
       micBtn.textContent = micOn ? "🎤" : "🔇";
     };
 
     camBtn.onclick = () => {
       camOn = !camOn;
-      if (localStream)
-        localStream.getVideoTracks().forEach(track => track.enabled = camOn);
+      if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = camOn);
       camBtn.classList.toggle("active", !camOn);
       camBtn.textContent = camOn ? "🎥" : "📷";
     };
@@ -233,50 +180,48 @@
       if (peerConnection) return;
       peerConnection = new RTCPeerConnection();
 
-      if (localStream) {
-        localStream.getTracks().forEach(track =>
-          peerConnection.addTrack(track, localStream)
-        );
-      }
-
       peerConnection.ontrack = (event) => {
         document.getElementById("remoteVideo").srcObject = event.streams[0];
       };
 
       peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("signal", { candidate: event.candidate });
+        if (event.candidate && partnerId) {
+          socket.emit("signal", { to: partnerId, candidate: event.candidate });
         }
       };
+
+      if (localStream) {
+        localStream.getTracks().forEach(track =>
+          peerConnection.addTrack(track, localStream)
+        );
+      }
     }
 
     function cleanup() {
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-      }
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        localStream = null;
-      }
+      if (peerConnection) { peerConnection.close(); peerConnection = null; }
+      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
       document.getElementById("localVideo").srcObject = null;
       document.getElementById("remoteVideo").srcObject = null;
       endBtn.disabled = true;
       findBtn.disabled = false;
+      partnerId = null;
     }
 
+    // ==== SOCKET HANDLERS ====
     socket.on("status", log);
     socket.on("waiting", log);
+
     socket.on("partner-left", () => {
-      log("⚠️ Partner left");
-      cleanup();
-    });
-    socket.on("call-ended", () => {
-      log("📞 Call ended");
+      log("⚠️ Partner left.");
       cleanup();
     });
 
-    socket.on("partner-found", async ({ partnerId: pId, partnerName }) => {
+    socket.on("call-ended", () => {
+      log("📞 Call ended.");
+      cleanup();
+    });
+
+    socket.on("partner-found", async ({ partnerId: pId, partnerName, initiator }) => {
       log("🎉 Partner found: " + partnerName);
       partnerId = pId;
       endBtn.disabled = false;
@@ -285,36 +230,39 @@
       document.getElementById("localVideo").srcObject = localStream;
       await createPeerConnection();
 
-      if (socket.id < partnerId) {
+      // Only the initiator creates and sends the offer
+      if (initiator) {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-        socket.emit("signal", { offer });
+        socket.emit("signal", { to: partnerId, offer });
+        log("📡 Sent offer to partner.");
       }
     });
 
-    socket.on("signal", async (data) => {
+    socket.on("signal", async ({ from, offer, answer, candidate }) => {
       try {
-        if (data.offer) {
-          await createPeerConnection();
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          socket.emit("signal", { answer });
-          pendingCandidates.forEach(c => peerConnection.addIceCandidate(c));
-          pendingCandidates = [];
-        } else if (data.answer) {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-        } else if (data.candidate) {
-          const candidate = new RTCIceCandidate(data.candidate);
-          if (peerConnection && peerConnection.remoteDescription) {
-            await peerConnection.addIceCandidate(candidate);
-          } else {
-            pendingCandidates.push(candidate);
-          }
+        if (!peerConnection) await createPeerConnection();
+
+        if (offer) {
+          log("📨 Received offer, sending answer...");
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+          const answerDesc = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answerDesc);
+          socket.emit("signal", { to: from, answer: answerDesc });
+        } 
+        else if (answer) {
+          log("✅ Received answer, connection established.");
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        } 
+        else if (candidate) {
+          const ice = new RTCIceCandidate(candidate);
+          if (peerConnection.remoteDescription) await peerConnection.addIceCandidate(ice);
+          else pendingCandidates.push(ice);
         }
+
       } catch (err) {
-        console.error("Signal handling error:", err);
-        log("⚠️ Error: " + err.message);
+        console.error("Signal error:", err);
+        log("⚠️ Signal error: " + err.message);
       }
     });
   </script>
