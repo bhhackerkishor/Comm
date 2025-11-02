@@ -97,29 +97,23 @@
     socket.on("partner-left", () => log("Partner left"));
     socket.on("call-ended", () => log("Call ended"));
     
-    socket.on("partner-found", async ({ partnerId, partnerName }) => {
+   socket.on("partner-found", async ({ partnerId, partnerName }) => {
   log("Partner found: " + partnerName);
   endBtn.disabled = false;
 
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   document.getElementById("localVideo").srcObject = localStream;
 
-  peerConnection = new RTCPeerConnection();
-  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-  peerConnection.ontrack = (event) => {
-    document.getElementById("remoteVideo").srcObject = event.streams[0];
-  };
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) socket.emit("signal", { candidate: event.candidate });
-  };
+  await createPeerConnection();
 
-  // ✅ Only the user who initiated the pairing sends the offer
-  if (socket.id < partnerId) { // simple deterministic rule
+  // Only the user with lower socket.id starts the offer
+  if (socket.id < partnerId) {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     socket.emit("signal", { offer });
   }
 });
+
 
 
     socket.on("signal", async (data) => {
