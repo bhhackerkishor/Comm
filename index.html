@@ -1,218 +1,355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>TalkPair</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      background: linear-gradient(145deg, #1a1c1f, #0c0d0f);
-      color: #fff;
-      font-family: 'Poppins', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .card {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      padding: 30px 40px;
-      text-align: center;
-      width: 360px;
-      box-shadow: 0 4px 30px rgba(0,0,0,0.3);
-    }
-    h1 { margin-bottom: 15px; font-weight: 600; }
-    input {
-      width: 100%; padding: 10px 14px; border-radius: 8px;
-      border: none; outline: none; font-size: 15px;
-      margin-bottom: 15px; background: rgba(255,255,255,0.1);
-      color: white;
-    }
-    .controls {
-      display: flex; flex-wrap: wrap; justify-content: center;
-      gap: 10px; margin-top: 10px;
-    }
-    button {
-      background: rgba(255,255,255,0.1); color: white;
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 12px; padding: 10px 16px; cursor: pointer;
-      font-size: 14px; transition: all 0.25s ease; min-width: 90px;
-    }
-    button:hover { background: rgba(255,255,255,0.2); }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-    button.active { background: #0f9d58; }
-    button.danger { background: #d93025; }
-    #status { margin-top: 15px; font-size: 14px; color: #aaa; min-height: 20px; }
-    #partner { font-weight: 600; color: #00c3ff; margin-top: 8px; }
-    .ringing { animation: blink 1s infinite; color: #ffb300; }
-    @keyframes blink { 50% { opacity: 0.3; } }
-    #timer { margin-top: 10px; font-size: 13px; color: #ccc; }
-  </style>
+  <meta charset="UTF-8" />
+  <title>TalkPair</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: linear-gradient(145deg, #1a1c1f, #0c0d0f);
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px 40px;
+      text-align: center;
+      width: 360px;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      font-size: 15px;
+      margin-bottom: 15px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.25s ease;
+      min-width: 90px;
+    }
+
+    button:hover { background: rgba(255,255,255,0.2); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    button.active { background: #0f9d58; }
+    button.danger { background: #d93025; }
+
+    #status {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #aaa;
+      min-height: 20px;
+    }
+
+    #partner {
+      font-weight: 600;
+      color: #00c3ff;
+      margin-top: 8px;
+    }
+
+    .ringing { animation: blink 1s infinite; color: #ffb300; }
+    @keyframes blink { 50% { opacity: 0.3; } }
+
+    #timer { margin-top: 10px; font-size: 13px; color: #ccc; }
+  </style>
 </head>
 <body>
-  <div class="card">
-    <h1>🎙️ TalkPair</h1>
-    <input id="name" placeholder="Enter your name" />
-    <div class="controls">
-      <button id="register">Register</button>
-      <button id="find" disabled>Find</button>
-      <button id="end" class="danger" disabled>End</button>
-      <button id="mute" disabled>🎤 Mic</button>
-      <button id="speaker" disabled>🔊 Speaker</button>
-    </div>
-    <p id="partner"></p>
-    <p id="status">Not connected</p>
-    <p id="timer"></p>
-  </div>
+  <div class="card">
+    <h1>🎙️ TalkPair</h1>
+    <input id="name" placeholder="Enter your name" />
+    <div class="controls">
+      <button id="register">Register</button>
+      <button id="find" disabled>Find</button>
+      <button id="end" class="danger" disabled>End</button>
+      <button id="mute" disabled>🎤 Mic On</button>
+      <button id="speaker" disabled>🔊 Speaker On</button>
+    </div>
+    <p id="partner"></p>
+    <p id="status">Not connected</p>
+    <p id="timer"></p>
+  </div>
 
-  <audio id="localAudio" autoplay muted></audio>
-  <audio id="remoteAudio" autoplay></audio>
+  <audio id="localAudio" autoplay muted></audio>
+  <audio id="remoteAudio" autoplay></audio>
 
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <script>
-    const socket = io("https://server-09p9.onrender.com");
-    const nameInput = document.getElementById("name");
-    const btnRegister = document.getElementById("register");
-    const btnFind = document.getElementById("find");
-    const btnEnd = document.getElementById("end");
-    const btnMute = document.getElementById("mute");
-    const btnSpeaker = document.getElementById("speaker");
-    const statusEl = document.getElementById("status");
-    const partnerEl = document.getElementById("partner");
-    const timerEl = document.getElementById("timer");
-    const localAudio = document.getElementById("localAudio");
-    const remoteAudio = document.getElementById("remoteAudio");
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const socket = io("https://server-09p9.onrender.com");
+    const nameInput = document.getElementById("name");
+    const btnRegister = document.getElementById("register");
+    const btnFind = document.getElementById("find");
+    const btnEnd = document.getElementById("end");
+    const btnMute = document.getElementById("mute");
+    const btnSpeaker = document.getElementById("speaker");
+    const statusEl = document.getElementById("status");
+    const partnerEl = document.getElementById("partner");
+    const timerEl = document.getElementById("timer");
+    const localAudio = document.getElementById("localAudio");
+    const remoteAudio = document.getElementById("remoteAudio");
 
-    let pc, localStream, partnerId, isMuted = false, speakerOn = true, timer, callStart, isCaller = false;
+    let pc, localStream, partnerId, isMuted = false, speakerOn = true, timer, callStart;
+    let isRegistered = false; // New state variable
 
-    async function resetConnection() {
-      if (pc) { pc.ontrack = null; pc.onicecandidate = null; pc.close(); pc = null; }
-      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-      partnerId = null;
-      clearInterval(timer);
-      timerEl.textContent = "";
-      btnEnd.disabled = true;
-      btnMute.disabled = true;
-      btnSpeaker.disabled = true;
-      btnMute.classList.remove("active");
-      btnSpeaker.classList.remove("active");
-      remoteAudio.srcObject = null;
-      partnerEl.textContent = "";
-      statusEl.classList.remove("ringing");
-    }
+    // Helper function to update button states based on application status
+    function updateUI(isConnecting = false, isConnected = false) {
+      btnRegister.disabled = isRegistered;
+      nameInput.disabled = isRegistered;
+      btnFind.disabled = !isRegistered || isConnecting || isConnected;
+      btnEnd.disabled = !isConnected;
+      btnMute.disabled = !isConnected;
+      btnSpeaker.disabled = !isConnected;
+      
+      btnMute.textContent = isMuted ? "🔇 Mic Off" : "🎤 Mic On";
+      btnMute.classList.toggle("active", isMuted);
+      
+      btnSpeaker.textContent = speakerOn ? "🔊 Speaker On" : "🔈 Speaker Off";
+      btnSpeaker.classList.toggle("active", !speakerOn); // Active when speaker is OFF (muted)
+    }
 
-    async function initPeer() {
-      pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localAudio.srcObject = localStream;
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-      pc.ontrack = e => { remoteAudio.srcObject = e.streams[0]; };
-      pc.onicecandidate = e => {
-        if (e.candidate && partnerId) socket.emit("signal", { to: partnerId, data: e.candidate });
-      };
-    }
+    async function resetConnection() {
+      if (pc) { 
+        // Explicitly check if the PC state is not closed before calling close
+        if (pc.connectionState !== 'closed') {
+          pc.close(); 
+        }
+        pc = null;
+      }
+      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+      partnerId = null;
+      remoteAudio.srcObject = null;
+      partnerEl.textContent = "";
+      statusEl.classList.remove("ringing");
+      clearInterval(timer);
+      timerEl.textContent = "";
+      // Reset controls to initial state after registration
+      statusEl.textContent = isRegistered ? "Ready to find partner" : "Not connected";
+      updateUI();
+    }
 
-    function startTimer() {
-      callStart = Date.now();
-      timer = setInterval(() => {
-        const diff = Math.floor((Date.now() - callStart) / 1000);
-        const m = String(Math.floor(diff / 60)).padStart(2, "0");
-        const s = String(diff % 60).padStart(2, "0");
-        timerEl.textContent = `⏱️ ${m}:${s}`;
-      }, 1000);
-    }
+    async function initPeer() {
+      // Ensure a clean slate before starting a new connection
+      await resetConnection(); 
+      
+      pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
 
-    btnRegister.onclick = () => {
-      const name = nameInput.value.trim();
-      if (!name) return alert("Enter name first");
-      socket.emit("register", name);
-      statusEl.textContent = "✅ Registered as " + name;
-      btnFind.disabled = false;
-    };
+      // Get media stream and add tracks
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localAudio.srcObject = localStream;
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      } catch (err) {
+        console.error("Could not get media stream:", err);
+        statusEl.textContent = "🚫 Error: Please grant mic access.";
+        updateUI();
+        return false; // Indicate failure
+      }
 
-    btnFind.onclick = async () => {
-      await resetConnection();
-      socket.emit("find-partner");
-      statusEl.textContent = "🔍 Finding partner...";
-      isCaller = true;
-    };
+      pc.ontrack = e => { 
+        // Set up remote audio when track is received
+        if (remoteAudio.srcObject !== e.streams[0]) {
+          remoteAudio.srcObject = e.streams[0]; 
+        }
+      };
+      
+      // ICE candidate handling
+      pc.onicecandidate = e => { if (e.candidate && partnerId) socket.emit("signal", e.candidate); };
 
-    socket.on("waiting", msg => statusEl.textContent = msg);
+      // Log connection state changes for debugging
+      pc.onconnectionstatechange = () => {
+        console.log("Peer connection state:", pc.connectionState);
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          // Handle unexpected disconnects
+          if (partnerId) { // Only show partner-left message if we had a partner
+            resetConnection();
+            statusEl.textContent = "⚠️ Partner disconnected unexpectedly.";
+          }
+        }
+      };
+      return true; // Indicate success
+    }
 
-    socket.on("partner-found", async ({ partnerId: id, partnerName, initiator }) => {
-      partnerId = id;
-      partnerEl.textContent = "Partner: " + partnerName;
-      statusEl.textContent = "📞 Connecting...";
-      await initPeer();
+    function startTimer() {
+      callStart = Date.now();
+      clearInterval(timer); // Clear any existing timer just in case
+      timer = setInterval(() => {
+        const diff = Math.floor((Date.now() - callStart) / 1000);
+        const m = String(Math.floor(diff / 60)).padStart(2, "0");
+        const s = String(diff % 60).padStart(2, "0");
+        timerEl.textContent = `⏱️ ${m}:${s}`;
+      }, 1000);
+    }
 
-      // only initiator creates offer
-      if (initiator) {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit("signal", { to: partnerId, data: offer });
-      }
-    });
+    // --- Event Listeners ---
 
-    socket.on("signal", async ({ from, data }) => {
-      if (!pc) await initPeer();
-      partnerId = from;
+    btnRegister.onclick = () => {
+      const name = nameInput.value.trim();
+      if (!name) return alert("Enter name first, you sly dog.");
+      socket.emit("register", name);
+      isRegistered = true; // Mark as registered immediately
+      statusEl.textContent = "✅ Registered as " + name;
+      updateUI();
+    };
 
-      if (data.type === "offer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("signal", { to: from, data: answer });
-      } else if (data.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
-        statusEl.textContent = "🟢 Connected";
-        btnEnd.disabled = false;
-        btnMute.disabled = false;
-        btnSpeaker.disabled = false;
-        startTimer();
-      } else if (data.candidate) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(data));
-        } catch (e) {
-          console.warn("ICE candidate error:", e);
-        }
-      }
-    });
+    btnFind.onclick = async () => {
+      if (!isRegistered) return alert("You must register first!");
+      
+      await resetConnection(); // Start fresh before finding
+      
+      socket.emit("find-partner");
+      statusEl.textContent = "🔍 Finding partner...";
+      updateUI(true, false); // Update UI to connecting state
+    };
 
-    btnEnd.onclick = async () => {
-      socket.emit("end-call", { to: partnerId });
-      await resetConnection();
-      statusEl.textContent = "❌ Call ended. Click Find to reconnect.";
-    };
+    btnEnd.onclick = async () => {
+      if (partnerId) {
+        socket.emit("end-call");
+      }
+      await resetConnection();
+      statusEl.textContent = "❌ Call ended. Click Find to reconnect.";
+    };
 
-    socket.on("call-ended", async () => {
-      await resetConnection();
-      statusEl.textContent = "📴 Partner ended the call.";
-    });
+    btnMute.onclick = () => {
+      if (!localStream) return;
+      isMuted = !isMuted;
+      // Mute/Unmute local audio track
+      localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+      updateUI(false, true); // Update button text/class
+    };
 
-    socket.on("partner-left", async () => {
-      await resetConnection();
-      statusEl.textContent = "🔴 Partner disconnected.";
-    });
+    btnSpeaker.onclick = () => {
+      speakerOn = !speakerOn;
+      // Mute/Unmute remote audio element
+      remoteAudio.muted = !speakerOn; 
+      updateUI(false, true); // Update button text/class
+    };
 
-    btnMute.onclick = () => {
-      if (!localStream) return;
-      isMuted = !isMuted;
-      localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
-      btnMute.classList.toggle("active", isMuted);
-      btnMute.textContent = isMuted ? "🔇 Mic Off" : "🎤 Mic On";
-    };
+    // --- Socket.io Handlers ---
+    
+    socket.on("waiting", msg => statusEl.textContent = msg);
 
-    btnSpeaker.onclick = () => {
-      speakerOn = !speakerOn;
-      remoteAudio.muted = !speakerOn;
-      btnSpeaker.classList.toggle("active", !speakerOn);
-      btnSpeaker.textContent = speakerOn ? "🔊 Speaker On" : "🔈 Speaker Off";
-    };
-  </script>
+    socket.on("partner-found", async ({ partnerId: id, partnerName }) => {
+      // Make sure we aren't already connected to someone else (logic guard)
+      if (partnerId) return; 
+      
+      partnerId = id;
+      partnerEl.textContent = "Partner: " + partnerName;
+      statusEl.textContent = "📞 Ringing...";
+      statusEl.classList.add("ringing");
+      
+      if (!(await initPeer())) return; // Initialize peer connection. Stop if it fails (e.g., no mic access)
+      
+      // Caller: create and send offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("signal", offer);
+      
+      updateUI(true, false);
+    });
+
+    socket.on("signal", async data => {
+      if (!pc) {
+        // This client is the callee
+        if (data.type === "offer") {
+          // We only initPeer if we receive an offer and don't have a PC yet
+          if (!(await initPeer())) return;
+        } else if (!data.type) {
+          // Ignore late signals (like ICE candidates) if no call is active
+          return;
+        }
+      }
+
+      if (data.type === "offer") {
+        // Callee: set remote offer, create, and send answer
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("signal", answer);
+        
+        // Note: Partner ID will be set by a separate "partner-found" event on the callee side
+        // We assume the server sends "partner-found" to both parties before the signalling begins
+        
+      } else if (data.type === "answer") {
+        // Caller: set remote answer
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        statusEl.textContent = "🟢 Connected";
+        statusEl.classList.remove("ringing");
+        updateUI(false, true); // Update UI to connected state
+        startTimer();
+      } else if (data.candidate && pc.remoteDescription) {
+        // ICE candidate
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data));
+        } catch (e) {
+          console.error("Error adding ICE candidate:", e);
+        }
+      }
+    });
+    
+    // The callee is connected once both sides have set up their descriptions. 
+    // This event ensures both sides know they are fully connected and enables controls.
+    socket.on("call-connected", () => {
+      // This ensures the Callee also updates their UI and starts the timer
+      if (partnerId && pc) { 
+        statusEl.textContent = "🟢 Connected";
+        statusEl.classList.remove("ringing");
+        updateUI(false, true);
+        startTimer();
+      }
+    });
+
+    socket.on("call-ended", async () => {
+      if (partnerId) { // Only run if we actually had a partner
+        await resetConnection();
+        statusEl.textContent = "📴 Partner ended the call. Click Find to reconnect.";
+      }
+    });
+
+    socket.on("partner-left", async () => {
+      if (partnerId) { // Only run if we actually had a partner
+        await resetConnection();
+        statusEl.textContent = "🔴 Partner disconnected from server.";
+      }
+    });
+    
+    // Initialize UI state on load
+    updateUI(); 
+  </script>
 </body>
 </html>
