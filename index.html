@@ -25,12 +25,12 @@
         <button onclick="registerUser()">Register</button>
     </div>
 
-    <div class="controls hidden" id="call-controls">
+    <div class="controls " id="call-controls">
         <button onclick="findPartner()" id="find-btn">Find Partner</button>
         <button onclick="endCall()" id="end-btn" disabled>End Call</button>
     </div>
 
-    <div class="video-container hidden" id="video-area">
+    <div class="video-container " id="video-area">
         <h3>Current Partner: <span id="partner-name">...</span></h3>
         <video id="local-video" autoplay muted></video>
         <video id="remote-video" autoplay></video>
@@ -111,11 +111,12 @@
             });
 
             socket.on("partner-found", async ({ partnerId, partnerName }) => {
-                
+                updateStatus(`Partner found: ${partnerName}! Starting call...`);
+                showCallUI(partnerName);
                 
                 // If we initiated the search (isInitiator is true), we make the Offer
                 await setupPeerConnection();
-                if (isInitiator) {
+                if (isInitiator) { 
                     const offer = await peerConnection.createOffer();
                     await peerConnection.setLocalDescription(offer);
                     socket.emit("signal", { sdp: peerConnection.localDescription });
@@ -241,6 +242,7 @@
             if (!socket || !socket.connected) {
                 return updateStatus("Not connected to server!");
             }
+            
             
             // This flag marks this client as the one who will create the WebRTC Offer
             isInitiator = true; 
