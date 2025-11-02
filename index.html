@@ -97,30 +97,30 @@
     socket.on("partner-left", () => log("Partner left"));
     socket.on("call-ended", () => log("Call ended"));
     
-    socket.on("partner-found", async ({ partnerName }) => {
-      log("Partner found: " + partnerName);
-      endBtn.disabled = false;
+    socket.on("partner-found", async ({ partnerId, partnerName }) => {
+  log("Partner found: " + partnerName);
+  endBtn.disabled = false;
 
-      // Setup WebRTC
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      document.getElementById("localVideo").srcObject = localStream;
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  document.getElementById("localVideo").srcObject = localStream;
 
-      peerConnection = new RTCPeerConnection();
-      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-      peerConnection.ontrack = (event) => {
-        document.getElementById("remoteVideo").srcObject = event.streams[0];
-      };
+  peerConnection = new RTCPeerConnection();
+  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+  peerConnection.ontrack = (event) => {
+    document.getElementById("remoteVideo").srcObject = event.streams[0];
+  };
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) socket.emit("signal", { candidate: event.candidate });
+  };
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("signal", { candidate: event.candidate });
-        }
-      };
+  // ✅ Only the user who initiated the pairing sends the offer
+  if (socket.id < partnerId) { // simple deterministic rule
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    socket.emit("signal", { offer });
+  }
+});
 
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit("signal", { offer });
-    });
 
     socket.on("signal", async (data) => {
       if (data.offer) {
@@ -143,13 +143,18 @@
         socket.emit("signal", { answer });
       } else if (data.answer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-      } else if (data.candidate) {
-        try {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (e) {
-          console.error("Error adding received ICE candidate", e);
-        }
-      }
+      } } else if (data.candidate) {
+  if (!peerConnection) {
+    console.warn("No peerConnection yet, skipping candidate");
+    return;
+  }
+  try {
+    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } catch (e) {
+    console.error("Error adding received ICE candidate", e);
+  }
+}
+
     });
   </script>
 </body>
